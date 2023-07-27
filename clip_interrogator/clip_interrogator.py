@@ -133,7 +133,7 @@ class Interrogator():
                 pretrained=clip_model_pretrained_name, 
                 precision='fp16' if config.device == 'cuda' else 'fp32',
                 device=config.device,
-                jit=True, # jit=True is not supported for ViT-H-14/laion2b_s32b_b79k. 
+                jit=False, # jit=True is not supported for ViT-H-14/laion2b_s32b_b79k. 
                 cache_dir=config.clip_model_path
             )
             self.clip_model.eval()
@@ -159,7 +159,7 @@ class Interrogator():
         print(f"data_path: {config.data_path}")
         #self.flavors = LabelTable(load_list(config.data_path, 'flavors.txt'), "flavors", self)
         self.flavors = LabelTable(load_list(config.data_path, 'dogs.txt'), "dogs", self)
-        self.mediums = LabelTable(load_list(config.data_path, 'mediums.txt'), "mediums", self)
+        #self.mediums = LabelTable(load_list(config.data_path, 'mediums.txt'), "mediums", self)
         #self.movements = LabelTable(load_list(config.data_path, 'movements.txt'), "movements", self)
         #self.trendings = LabelTable(trending_list, "trendings", self)
         self.negative = LabelTable(load_list(config.data_path, 'negative.txt'), "negative", self)
@@ -246,16 +246,16 @@ class Interrogator():
         caption = caption or self.generate_caption(image)
         image_features = self.image_to_features(image)
 
-        medium = self.mediums.rank(image_features, 50)[0]
+        #medium = self.mediums.rank(image_features, 50)[0]
         #artist = self.artists.rank(image_features, 1)[0]
         #trending = self.trendings.rank(image_features, 1)[0]
         #movement = self.movements.rank(image_features, 1)[0]
         flaves = ", ".join(self.flavors.rank(image_features, max_flavors))
 
-        if caption.startswith(medium):
-            prompt = f"{caption}, {flaves}"
-        else:
-            prompt = f"{caption}, {medium}, {flaves}"
+        #if caption.startswith(medium):
+        #    prompt = f"{caption}, {flaves}"
+        #else:
+        prompt = f"{caption}, {flaves}"
 
         return _truncate_to_fit(prompt, self.tokenize)
 
@@ -271,7 +271,7 @@ class Interrogator():
         are less readable."""
         caption = caption or self.generate_caption(image)
         image_features = self.image_to_features(image)
-        merged = _merge_tables([self.flavors, self.mediums], self)
+        merged = _merge_tables([self.flavors], self)
         tops = merged.rank(image_features, max_flavors)
         return _truncate_to_fit(caption + ", " + ", ".join(tops), self.tokenize)
 
@@ -300,7 +300,7 @@ class Interrogator():
         caption = caption or self.generate_caption(image)
         image_features = self.image_to_features(image)
 
-        merged = _merge_tables([self.flavors, self.mediums], self)
+        merged = _merge_tables([self.flavors], self)
         flaves = merged.rank(image_features, self.config.flavor_intermediate_count)
         best_prompt, best_sim = caption, self.similarity(image_features, caption)
         best_prompt = self.chain(image_features, flaves, best_prompt, best_sim, min_count=min_flavors, max_count=max_flavors, desc="Flavor chain")

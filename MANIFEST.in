@@ -1,6 +1,3 @@
-include clip_interrogator/data/artists.txt
 include clip_interrogator/data/dogs.txt
-include clip_interrogator/data/mediums.txt
-include clip_interrogator/data/movements.txt
 include clip_interrogator/data/negative.txt
 include requirements.txt
