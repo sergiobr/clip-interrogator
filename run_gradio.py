@@ -30,19 +30,29 @@ def image_analysis(image, clip_model_name):
     image = image.convert('RGB')
     image_features = ci.image_to_features(image)
 
-    top_mediums = ci.mediums.rank(image_features, 5)
-    top_artists = ci.artists.rank(image_features, 5)
-    top_movements = ci.movements.rank(image_features, 5)
-    top_trendings = ci.trendings.rank(image_features, 5)
-    top_flavors = ci.flavors.rank(image_features, 5)
+    top_mediums = ci.mediums.rank(image_features, 10)
+    #top_artists = ci.artists.rank(image_features, 0)
+    #top_movements = ci.movements.rank(image_features, 2)
+    #top_trendings = ci.trendings.rank(image_features, 0)
+    top_flavors = ci.flavors.rank(image_features, 50)
+
 
     medium_ranks = {medium: sim for medium, sim in zip(top_mediums, ci.similarities(image_features, top_mediums))}
-    artist_ranks = {artist: sim for artist, sim in zip(top_artists, ci.similarities(image_features, top_artists))}
-    movement_ranks = {movement: sim for movement, sim in zip(top_movements, ci.similarities(image_features, top_movements))}
-    trending_ranks = {trending: sim for trending, sim in zip(top_trendings, ci.similarities(image_features, top_trendings))}
-    flavor_ranks = {flavor: sim for flavor, sim in zip(top_flavors, ci.similarities(image_features, top_flavors))}
+    #artist_ranks = {artist: sim for artist, sim in zip(top_artists, ci.similarities(image_features, top_artists))}
+    #movement_ranks = {movement: sim for movement, sim in zip(top_movements, ci.similarities(image_features, top_movements))}
+    #trending_ranks = {trending: sim for trending, sim in zip(top_trendings, ci.similarities(image_features, top_trendings))}
+    # atribut to flavor_ranks the top 20 flavors (top_flavor) and the similarities between the image and the top 20 flavors
+    # iterate over flavor and sim in zip(top_flavors, ci.similarities(image_features, top_flavors))
+    # zip(top_flavors, ci.similarities(image_features, top_flavors)) returns a list of tuples (flavor, similarity)
+    list_tuples_flavor_similarity = zip(top_flavors, ci.similarities(image_features, top_flavors))
+    # this syntax is called list comprehension. It is a way to create a list from another list. 
+    # In this case, we are creating a list of tuples (flavor, similarity) from the list of tuples returned by zip.
+    # the syntax {flavor: sim for flavor, sim in list_tuples_flavor_similarity} is called dictionary comprehension. 
+    # It is a way to create a dictionary from another list. 
+    # In this case, we are creating a dictionary with the flavor as key and the similarity as value.
+    flavor_ranks = {flavor: sim for flavor, sim in list_tuples_flavor_similarity}
     
-    return medium_ranks, artist_ranks, movement_ranks, trending_ranks, flavor_ranks
+    return medium_ranks, flavor_ranks
 
 def image_to_prompt(image, mode, clip_model_name, blip_model_name):
     if blip_model_name != ci.config.caption_model_name:
@@ -82,12 +92,12 @@ def analyze_tab():
             model = gr.Dropdown(list_clip_models(), value='ViT-L-14/openai', label='CLIP Model')
         with gr.Row():
             medium = gr.Label(label="Medium", num_top_classes=5)
-            artist = gr.Label(label="Artist", num_top_classes=5)        
-            movement = gr.Label(label="Movement", num_top_classes=5)
-            trending = gr.Label(label="Trending", num_top_classes=5)
-            flavor = gr.Label(label="Flavor", num_top_classes=5)
+            #artist = gr.Label(label="Artist", num_top_classes=5)        
+            #movement = gr.Label(label="Movement", num_top_classes=5)
+            #trending = gr.Label(label="Trending", num_top_classes=5)
+            flavor = gr.Label(label="Breed", num_top_classes=5)
     button = gr.Button("Analyze")
-    button.click(image_analysis, inputs=[image, model], outputs=[medium, artist, movement, trending, flavor])
+    button.click(image_analysis, inputs=[image, model], outputs=[medium, flavor])
 
 with gr.Blocks() as ui:
     gr.Markdown("# <center>🕵️‍♂️ CLIP Interrogator 🕵️‍♂️</center>")

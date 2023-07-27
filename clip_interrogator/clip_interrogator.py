@@ -29,28 +29,54 @@ CACHE_URL_BASE = 'https://huggingface.co/pharma/ci-preprocess/resolve/main/'
 @dataclass 
 class Config:
     # models can optionally be passed in directly
+    # if not, they will be loaded from huggingface
+    # if a model is loaded from huggingface, it will be cached locally
+    # if a model is loaded from huggingface, it will be offloaded to cpu by default
+    # if a model is loaded from huggingface, it will be converted to fp16 by default
+    # if a model is loaded from huggingface, it will be converted to fp32 if device is cpu
+    # if a model is loaded from huggingface, it will be converted to fp16 if device is cuda
+    # if a model is loaded from huggingface, it will be converted to fp16 if device is mps
+    # if a model is loaded from huggingface, it will be converted to fp16 if device is cuda and torch.backends.mps.is_available() is True
+    # if a model is loaded from huggingface, it will be converted to fp32 if device is cuda and torch.backends.mps.is_available() is False
+    # caption models are loaded from huggingface
     caption_model = None
+    # caption processors are loaded from huggingface
     caption_processor = None
+    # clip models are loaded from huggingface
     clip_model = None
+    # clip preprocessors are loaded from huggingface
     clip_preprocess = None
 
     # blip settings
     caption_max_length: int = 32
-    caption_model_name: Optional[str] = 'blip-large' # use a key from CAPTION_MODELS or None
+    caption_model_name: Optional[str] = 'blip-base' #'blip-large' # use a key from CAPTION_MODELS or None
+    # caption offload is True by default. 
+    # caption offload means that the caption model is loaded to cpu
     caption_offload: bool = False
 
     # clip settings
+    # clip model name is ViT-L-14/openai by default
+    # clip model name can be changed to ViT-H-14/laion2b_s32b_b79k
+    # ViT-L-14/openai is used for Stable Diffusion 1
+    # ViT-H-14/laion2b_s32b_b79k is used for Stable Diffusion 2
+    # ViT-L-14/openai is 990MB
+    # ViT-H-14/laion2b_s32b_b79k is 15.5GB
+    # ViT-L-14/openai is faster than ViT-H-14/laion2b_s32b_b79k
+    # ViT-L-14/openai is less accurate than ViT-H-14/laion2b_s32b_b79k
+    # ViT-L-14/openai is more stable than ViT-H-14/laion2b_s32b_b79k
     clip_model_name: str = 'ViT-L-14/openai'
+    # clip model local path to load model from
     clip_model_path: Optional[str] = None
+    # clip offload means that the clip model is loaded to cpu
     clip_offload: bool = False
 
     # interrogator settings
     cache_path: str = 'cache'   # path to store cached text embeddings
     download_cache: bool = True # when true, cached embeds are downloaded from huggingface
     chunk_size: int = 2048      # batch size for CLIP, use smaller for lower VRAM
-    data_path: str = os.path.join(os.path.dirname(__file__), 'data')
+    data_path: str = os.path.join(os.path.dirname(__file__), 'data') # path to data files
     device: str = ("mps" if torch.backends.mps.is_available() else "cuda" if torch.cuda.is_available() else "cpu")
-    flavor_intermediate_count: int = 2048
+    flavor_intermediate_count: int = 2048   # number of intermediate flavors to use for interrogate. use smaller for lower VRAM. 
     quiet: bool = False # when quiet progress bars are not shown
 
     def apply_low_vram_defaults(self):
@@ -107,7 +133,7 @@ class Interrogator():
                 pretrained=clip_model_pretrained_name, 
                 precision='fp16' if config.device == 'cuda' else 'fp32',
                 device=config.device,
-                jit=False,
+                jit=True, # jit=True is not supported for ViT-H-14/laion2b_s32b_b79k. 
                 cache_dir=config.clip_model_path
             )
             self.clip_model.eval()
@@ -116,40 +142,44 @@ class Interrogator():
             self.clip_preprocess = config.clip_preprocess
         self.tokenize = open_clip.get_tokenizer(clip_model_name)
 
-        sites = ['Artstation', 'behance', 'cg society', 'cgsociety', 'deviantart', 'dribbble', 
-                 'flickr', 'instagram', 'pexels', 'pinterest', 'pixabay', 'pixiv', 'polycount', 
-                 'reddit', 'shutterstock', 'tumblr', 'unsplash', 'zbrush central']
-        trending_list = [site for site in sites]
-        trending_list.extend(["trending on "+site for site in sites])
-        trending_list.extend(["featured on "+site for site in sites])
-        trending_list.extend([site+" contest winner" for site in sites])
+        #sites = ['Artstation', 'behance', 'cg society', 'cgsociety', 'deviantart', 'dribbble', 
+        #         'flickr', 'instagram', 'pexels', 'pinterest', 'pixabay', 'pixiv', 'polycount', 
+        #         'reddit', 'shutterstock', 'tumblr', 'unsplash', 'zbrush central']
+        #trending_list = [site for site in sites]
+        #trending_list.extend(["trending on "+site for site in sites])
+        #trending_list.extend(["featured on "+site for site in sites])
+        #trending_list.extend([site+" contest winner" for site in sites])
 
-        raw_artists = load_list(config.data_path, 'artists.txt')
-        artists = [f"by {a}" for a in raw_artists]
-        artists.extend([f"inspired by {a}" for a in raw_artists])
+        #raw_artists = load_list(config.data_path, 'artists.txt')
+        #artists = [f"by {a}" for a in raw_artists]
+        #artists.extend([f"inspired by {a}" for a in raw_artists])
 
         self._prepare_clip()
-        self.artists = LabelTable(artists, "artists", self)
-        self.flavors = LabelTable(load_list(config.data_path, 'flavors.txt'), "flavors", self)
+        #self.artists = LabelTable(artists, "artists", self)
+        print(f"data_path: {config.data_path}")
+        #self.flavors = LabelTable(load_list(config.data_path, 'flavors.txt'), "flavors", self)
+        self.flavors = LabelTable(load_list(config.data_path, 'dogs.txt'), "dogs", self)
         self.mediums = LabelTable(load_list(config.data_path, 'mediums.txt'), "mediums", self)
-        self.movements = LabelTable(load_list(config.data_path, 'movements.txt'), "movements", self)
-        self.trendings = LabelTable(trending_list, "trendings", self)
+        #self.movements = LabelTable(load_list(config.data_path, 'movements.txt'), "movements", self)
+        #self.trendings = LabelTable(trending_list, "trendings", self)
         self.negative = LabelTable(load_list(config.data_path, 'negative.txt'), "negative", self)
 
         end_time = time.time()
         if not config.quiet:
             print(f"Loaded CLIP model and data in {end_time-start_time:.2f} seconds.")
 
+    # This function is called by the function interrogate_classic
+    # 
     def chain(
         self, 
         image_features: torch.Tensor, 
-        phrases: List[str], 
-        best_prompt: str="", 
-        best_sim: float=0, 
-        min_count: int=8,
-        max_count: int=32, 
-        desc="Chaining", 
-        reverse: bool=False
+        phrases: List[str], # phrases is a list of strings. phrases is a list of flavors
+        best_prompt: str="", # best_prompt is a string. best_prompt is the best prompt so far
+        best_sim: float=0, # best_sim is a float. best_sim is the similarity between the image and the best_prompt
+        min_count: int=32, # min_count is an int. min_count is the minimum number of flavors to add to the prompt
+        max_count: int=128, # max_count is an int. max_count is the maximum number of flavors to add to the prompt
+        desc="Chaining", # desc is a string. desc is the description of the progress bar
+        reverse: bool=False # reverse is a bool. reverse is True if the similarity between the image and the prompt is negative
     ) -> str:
         self._prepare_clip()
 
@@ -160,6 +190,8 @@ class Interrogator():
             phrases.remove(best_prompt)
         curr_prompt, curr_sim = best_prompt, best_sim
         
+        # this function is called by the function chain
+        # this function returns True if the prompt is at max length
         def check(addition: str, idx: int) -> bool:
             nonlocal best_prompt, best_sim, curr_prompt, curr_sim
             prompt = curr_prompt + ", " + addition
@@ -202,36 +234,54 @@ class Interrogator():
             image_features /= image_features.norm(dim=-1, keepdim=True)
         return image_features
 
-    def interrogate_classic(self, image: Image, max_flavors: int=3, caption: Optional[str]=None) -> str:
+    """
+    # ============================================================================================================
+    # This function is called by the function image_to_prompt
+    # 
+    # ============================================================================================================
+    """
+    def interrogate_classic(self, image: Image, max_flavors: int=128, caption: Optional[str]=None) -> str:
         """Classic mode creates a prompt in a standard format first describing the image, 
         then listing the artist, trending, movement, and flavor text modifiers."""
         caption = caption or self.generate_caption(image)
         image_features = self.image_to_features(image)
 
-        medium = self.mediums.rank(image_features, 1)[0]
-        artist = self.artists.rank(image_features, 1)[0]
-        trending = self.trendings.rank(image_features, 1)[0]
-        movement = self.movements.rank(image_features, 1)[0]
+        medium = self.mediums.rank(image_features, 50)[0]
+        #artist = self.artists.rank(image_features, 1)[0]
+        #trending = self.trendings.rank(image_features, 1)[0]
+        #movement = self.movements.rank(image_features, 1)[0]
         flaves = ", ".join(self.flavors.rank(image_features, max_flavors))
 
         if caption.startswith(medium):
-            prompt = f"{caption} {artist}, {trending}, {movement}, {flaves}"
+            prompt = f"{caption}, {flaves}"
         else:
-            prompt = f"{caption}, {medium} {artist}, {trending}, {movement}, {flaves}"
+            prompt = f"{caption}, {medium}, {flaves}"
 
         return _truncate_to_fit(prompt, self.tokenize)
 
-    def interrogate_fast(self, image: Image, max_flavors: int=32, caption: Optional[str]=None) -> str:
+    """
+    # ============================================================================================================
+    # This function is called by the function image_to_prompt
+    # 
+    # ============================================================================================================
+    """
+    def interrogate_fast(self, image: Image, max_flavors: int=128, caption: Optional[str]=None) -> str:
         """Fast mode simply adds the top ranked terms after a caption. It generally results in 
         better similarity between generated prompt and image than classic mode, but the prompts
         are less readable."""
         caption = caption or self.generate_caption(image)
         image_features = self.image_to_features(image)
-        merged = _merge_tables([self.artists, self.flavors, self.mediums, self.movements, self.trendings], self)
+        merged = _merge_tables([self.flavors, self.mediums], self)
         tops = merged.rank(image_features, max_flavors)
         return _truncate_to_fit(caption + ", " + ", ".join(tops), self.tokenize)
 
-    def interrogate_negative(self, image: Image, max_flavors: int = 32) -> str:
+    """
+    # ============================================================================================================
+    # This function is called by the function image_to_prompt
+    # 
+    # ============================================================================================================
+    """
+    def interrogate_negative(self, image: Image, max_flavors: int = 256) -> str:
         """Negative mode chains together the most dissimilar terms to the image. It can be used
         to help build a negative prompt to pair with the regular positive prompt and often 
         improve the results of generated images particularly with Stable Diffusion 2."""
@@ -240,11 +290,17 @@ class Interrogator():
         flaves = flaves + self.negative.labels
         return self.chain(image_features, flaves, max_count=max_flavors, reverse=True, desc="Negative chain")
 
-    def interrogate(self, image: Image, min_flavors: int=8, max_flavors: int=32, caption: Optional[str]=None) -> str:
+    """
+    # ============================================================================================================
+    # This function is called by the function image_to_prompt
+    #
+    # ============================================================================================================
+    """
+    def interrogate(self, image: Image, min_flavors: int=8, max_flavors: int=128, caption: Optional[str]=None) -> str:
         caption = caption or self.generate_caption(image)
         image_features = self.image_to_features(image)
 
-        merged = _merge_tables([self.artists, self.flavors, self.mediums, self.movements, self.trendings], self)
+        merged = _merge_tables([self.flavors, self.mediums], self)
         flaves = merged.rank(image_features, self.config.flavor_intermediate_count)
         best_prompt, best_sim = caption, self.similarity(image_features, caption)
         best_prompt = self.chain(image_features, flaves, best_prompt, best_sim, min_count=min_flavors, max_count=max_flavors, desc="Flavor chain")
@@ -254,6 +310,13 @@ class Interrogator():
         candidates = [caption, classic_prompt, fast_prompt, best_prompt]
         return candidates[np.argmax(self.similarities(image_features, candidates))]
 
+        """
+    # ============================================================================================================
+    # This function receives a list of strings and returns a list of strings.
+    # The list of strings is the list of strings received as parameter sorted by similarity to the image.
+    # The returned array is the same length as the array received as parameter.
+    # ============================================================================================================
+    """
     def rank_top(self, image_features: torch.Tensor, text_array: List[str], reverse: bool=False) -> str:
         self._prepare_clip()
         text_tokens = self.tokenize([text for text in text_array]).to(self.device)
@@ -265,6 +328,7 @@ class Interrogator():
                 similarity = -similarity
         return text_array[similarity.argmax().item()]
 
+    # returns a float between -1 and 1 representing the similarity between the image and the text
     def similarity(self, image_features: torch.Tensor, text: str) -> float:
         self._prepare_clip()
         text_tokens = self.tokenize([text]).to(self.device)
@@ -274,12 +338,38 @@ class Interrogator():
             similarity = text_features @ image_features.T
         return similarity[0][0].item()
 
+    # returns a list of similarities between the image and each text in text_array
+    # the length of the list is the same as the length of text_array
+    # the first element of the list is the similarity between the image and the first text in text_array
+    # the second element of the list is the similarity between the image and the second text in text_array
+    # and so on
+    # the similarity between the image and the text is a float between -1 and 1
+    # the higher the similarity, the more similar the image and the text
+    # the lower the similarity, the less similar the image and the text
+    # the similarity is calculated using cosine similarity
+    # the cosine similarity is a measure of similarity between two non-zero vectors
     def similarities(self, image_features: torch.Tensor, text_array: List[str]) -> List[float]:
         self._prepare_clip()
         text_tokens = self.tokenize([text for text in text_array]).to(self.device)
         with torch.no_grad(), torch.cuda.amp.autocast():
             text_features = self.clip_model.encode_text(text_tokens)
+            # normalize the text features
+            # the norm of a vector is the length of the vector
+            # the norm of a vector is a scalar
+            # the norm of a vector is calculated by taking the square root of the sum of the squares of the vector
+            # the norm of a vector is always positive
+            # the norm of a vector is 0 if and only if the vector is the zero vector
+            # the norm of a vector is 1 if and only if the vector is a unit vector
+            # the norm of a vector is the distance from the origin to the point represented by the vector
+            # dim is the dimension along which the norm is calculated. dim=-1 means the last dimension.
+            # keepdim=True means the output tensor has the same number of dimensions as the input tensor 
             text_features /= text_features.norm(dim=-1, keepdim=True)
+            # the @ operator is the matrix multiplication operator
+            # the matrix multiplication operator is used to multiply two matrices
+            # the matrix multiplication operator is used to multiply a matrix and a vector
+            # the similarity between the image and the text is calculated by multiplying the image features and the text features
+            # cosine similarity is a measure of similarity between two non-zero vectors
+            # cosine similarity is calculated by taking the dot product of the two vectors and dividing it by the product of the norms of the two vectors
             similarity = text_features @ image_features.T
         return similarity.T[0].tolist()
 
@@ -316,6 +406,7 @@ class LabelTable():
 
         if len(self.labels) != len(self.embeds):
             self.embeds = []
+            # chunks receives a list of self.labels of size self.labels / config.chunk_size or 1, whichever is greater
             chunks = np.array_split(self.labels, max(1, len(self.labels)/config.chunk_size))
             for chunk in tqdm(chunks, desc=f"Preprocessing {desc}" if desc else None, disable=self.config.quiet):
                 text_tokens = self.tokenize(chunk).to(self.device)
@@ -444,6 +535,7 @@ def list_clip_models() -> List[str]:
 def load_list(data_path: str, filename: Optional[str] = None) -> List[str]:
     """Load a list of strings from a file."""
     if filename is not None:
+        print (f"Loading {os.path.join(data_path, filename)}...")
         data_path = os.path.join(data_path, filename)
     with open(data_path, 'r', encoding='utf-8', errors='replace') as f:
         items = [line.strip() for line in f.readlines()]

@@ -1,6 +1,7 @@
 *.pyc
 .cog/
 .vscode/
+.DS_Store
 bench/
 cache/
 ci_env/
