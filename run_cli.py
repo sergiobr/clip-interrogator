@@ -1,12 +1,11 @@
 #!/usr/bin/env python3
 import argparse
 import csv
-import open_clip
 import os
 import requests
 import torch
 from PIL import Image
-from clip_interrogator import Interrogator, Config
+from clip_interrogator import Interrogator, Config, list_clip_models
 
 def inference(ci, image, mode):
     image = image.convert('RGB')
@@ -20,9 +19,11 @@ def inference(ci, image, mode):
 def main():
     parser = argparse.ArgumentParser()
     parser.add_argument('-c', '--clip', default='ViT-L-14/openai', help='name of CLIP model to use')
+    parser.add_argument('-d', '--device', default='auto', help='device to use (auto, cuda or cpu)')
     parser.add_argument('-f', '--folder', help='path to folder of images')
     parser.add_argument('-i', '--image', help='image file or url')
     parser.add_argument('-m', '--mode', default='best', help='best, classic, or fast')
+    parser.add_argument("--lowvram", action='store_true', help="Optimize settings for low VRAM")
 
     args = parser.parse_args()
     if not args.folder and not args.image:
@@ -34,15 +35,24 @@ def main():
         exit(1)
 
     # validate clip model name
-    models = ['/'.join(x) for x in open_clip.list_pretrained()]
+    models = list_clip_models()
     if args.clip not in models:
         print(f"Could not find CLIP model {args.clip}!")
         print(f"    available models: {models}")
         exit(1)
 
+    # select device
+    if args.device == 'auto':
+        device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
+        if not torch.cuda.is_available():
+            print("CUDA is not available, using CPU. Warning: this will be very slow!")
+    else:
+        device = torch.device(args.device)
+
     # generate a nice prompt
-    device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
     config = Config(device=device, clip_model_name=args.clip)
+    if args.lowvram:
+        config.apply_low_vram_defaults()
     ci = Interrogator(config)
 
     # process single image
