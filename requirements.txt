@@ -7,3 +7,4 @@ tqdm
 open_clip_torch
 accelerate
 transformers>=4.27.1
+gradio
