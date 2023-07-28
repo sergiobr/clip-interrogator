@@ -28,17 +28,6 @@ CACHE_URL_BASE = 'https://huggingface.co/pharma/ci-preprocess/resolve/main/'
 
 @dataclass 
 class Config:
-    # models can optionally be passed in directly
-    # if not, they will be loaded from huggingface
-    # if a model is loaded from huggingface, it will be cached locally
-    # if a model is loaded from huggingface, it will be offloaded to cpu by default
-    # if a model is loaded from huggingface, it will be converted to fp16 by default
-    # if a model is loaded from huggingface, it will be converted to fp32 if device is cpu
-    # if a model is loaded from huggingface, it will be converted to fp16 if device is cuda
-    # if a model is loaded from huggingface, it will be converted to fp16 if device is mps
-    # if a model is loaded from huggingface, it will be converted to fp16 if device is cuda and torch.backends.mps.is_available() is True
-    # if a model is loaded from huggingface, it will be converted to fp32 if device is cuda and torch.backends.mps.is_available() is False
-    # caption models are loaded from huggingface
     caption_model = None
     # caption processors are loaded from huggingface
     caption_processor = None
@@ -49,21 +38,13 @@ class Config:
 
     # blip settings
     caption_max_length: int = 32
-    caption_model_name: Optional[str] = 'blip-base' #'blip-large' # use a key from CAPTION_MODELS or None
-    # caption offload is True by default. 
+    caption_model_name: Optional[str] = 'blip-large' #'blip-large' # use a key from CAPTION_MODELS or None
     # caption offload means that the caption model is loaded to cpu
     caption_offload: bool = False
 
     # clip settings
-    # clip model name is ViT-L-14/openai by default
-    # clip model name can be changed to ViT-H-14/laion2b_s32b_b79k
     # ViT-L-14/openai is used for Stable Diffusion 1
     # ViT-H-14/laion2b_s32b_b79k is used for Stable Diffusion 2
-    # ViT-L-14/openai is 990MB
-    # ViT-H-14/laion2b_s32b_b79k is 15.5GB
-    # ViT-L-14/openai is faster than ViT-H-14/laion2b_s32b_b79k
-    # ViT-L-14/openai is less accurate than ViT-H-14/laion2b_s32b_b79k
-    # ViT-L-14/openai is more stable than ViT-H-14/laion2b_s32b_b79k
     clip_model_name: str = 'ViT-L-14/openai'
     # clip model local path to load model from
     clip_model_path: Optional[str] = None
@@ -149,17 +130,19 @@ class Interrogator():
         #trending_list.extend(["trending on "+site for site in sites])
         #trending_list.extend(["featured on "+site for site in sites])
         #trending_list.extend([site+" contest winner" for site in sites])
-
+        
         #raw_artists = load_list(config.data_path, 'artists.txt')
         #artists = [f"by {a}" for a in raw_artists]
         #artists.extend([f"inspired by {a}" for a in raw_artists])
+        raw_breeds = load_list(config.data_path, 'dogs.txt')
+        breeds = [f"of the {a} breed" for a in raw_breeds]
 
         self._prepare_clip()
-        #self.artists = LabelTable(artists, "artists", self)
+        self.breeds = LabelTable(breeds, "breeds", self)
         print(f"data_path: {config.data_path}")
-        #self.flavors = LabelTable(load_list(config.data_path, 'flavors.txt'), "flavors", self)
-        self.flavors = LabelTable(load_list(config.data_path, 'dogs.txt'), "dogs", self)
-        #self.mediums = LabelTable(load_list(config.data_path, 'mediums.txt'), "mediums", self)
+        self.flavors = LabelTable(load_list(config.data_path, 'flavors.txt'), "flavors", self)
+        #self.flavors = LabelTable(load_list(config.data_path, 'dogs.txt'), "dogs", self)
+        self.mediums = LabelTable(load_list(config.data_path, 'mediums.txt'), "mediums", self)
         #self.movements = LabelTable(load_list(config.data_path, 'movements.txt'), "movements", self)
         #self.trendings = LabelTable(trending_list, "trendings", self)
         self.negative = LabelTable(load_list(config.data_path, 'negative.txt'), "negative", self)
@@ -177,7 +160,7 @@ class Interrogator():
         best_prompt: str="", # best_prompt is a string. best_prompt is the best prompt so far
         best_sim: float=0, # best_sim is a float. best_sim is the similarity between the image and the best_prompt
         min_count: int=32, # min_count is an int. min_count is the minimum number of flavors to add to the prompt
-        max_count: int=128, # max_count is an int. max_count is the maximum number of flavors to add to the prompt
+        max_count: int=64, # max_count is an int. max_count is the maximum number of flavors to add to the prompt
         desc="Chaining", # desc is a string. desc is the description of the progress bar
         reverse: bool=False # reverse is a bool. reverse is True if the similarity between the image and the prompt is negative
     ) -> str:
@@ -240,22 +223,22 @@ class Interrogator():
     # 
     # ============================================================================================================
     """
-    def interrogate_classic(self, image: Image, max_flavors: int=128, caption: Optional[str]=None) -> str:
+    def interrogate_classic(self, image: Image, max_flavors: int=80, caption: Optional[str]=None) -> str:
         """Classic mode creates a prompt in a standard format first describing the image, 
         then listing the artist, trending, movement, and flavor text modifiers."""
         caption = caption or self.generate_caption(image)
         image_features = self.image_to_features(image)
 
-        #medium = self.mediums.rank(image_features, 50)[0]
-        #artist = self.artists.rank(image_features, 1)[0]
+        medium = self.mediums.rank(image_features, 5)[0]
+        breed = self.breeds.rank(image_features, 2)[0]
         #trending = self.trendings.rank(image_features, 1)[0]
         #movement = self.movements.rank(image_features, 1)[0]
         flaves = ", ".join(self.flavors.rank(image_features, max_flavors))
 
-        #if caption.startswith(medium):
-        #    prompt = f"{caption}, {flaves}"
-        #else:
-        prompt = f"{caption}, {flaves}"
+        if caption.startswith(medium):
+            prompt = f"{caption}, {flaves}"
+        else:
+            prompt = f"{caption}, {medium}, {breed}, {flaves}"
 
         return _truncate_to_fit(prompt, self.tokenize)
 
@@ -265,14 +248,15 @@ class Interrogator():
     # 
     # ============================================================================================================
     """
-    def interrogate_fast(self, image: Image, max_flavors: int=128, caption: Optional[str]=None) -> str:
+    def interrogate_fast(self, image: Image, max_flavors: int=80, caption: Optional[str]=None) -> str:
         """Fast mode simply adds the top ranked terms after a caption. It generally results in 
         better similarity between generated prompt and image than classic mode, but the prompts
         are less readable."""
         caption = caption or self.generate_caption(image)
         image_features = self.image_to_features(image)
-        merged = _merge_tables([self.flavors], self)
+        merged = _merge_tables([self.flavors, self.mediums, self.breeds], self)
         tops = merged.rank(image_features, max_flavors)
+        
         return _truncate_to_fit(caption + ", " + ", ".join(tops), self.tokenize)
 
     """
@@ -353,23 +337,7 @@ class Interrogator():
         text_tokens = self.tokenize([text for text in text_array]).to(self.device)
         with torch.no_grad(), torch.cuda.amp.autocast():
             text_features = self.clip_model.encode_text(text_tokens)
-            # normalize the text features
-            # the norm of a vector is the length of the vector
-            # the norm of a vector is a scalar
-            # the norm of a vector is calculated by taking the square root of the sum of the squares of the vector
-            # the norm of a vector is always positive
-            # the norm of a vector is 0 if and only if the vector is the zero vector
-            # the norm of a vector is 1 if and only if the vector is a unit vector
-            # the norm of a vector is the distance from the origin to the point represented by the vector
-            # dim is the dimension along which the norm is calculated. dim=-1 means the last dimension.
-            # keepdim=True means the output tensor has the same number of dimensions as the input tensor 
             text_features /= text_features.norm(dim=-1, keepdim=True)
-            # the @ operator is the matrix multiplication operator
-            # the matrix multiplication operator is used to multiply two matrices
-            # the matrix multiplication operator is used to multiply a matrix and a vector
-            # the similarity between the image and the text is calculated by multiplying the image features and the text features
-            # cosine similarity is a measure of similarity between two non-zero vectors
-            # cosine similarity is calculated by taking the dot product of the two vectors and dividing it by the product of the norms of the two vectors
             similarity = text_features @ image_features.T
         return similarity.T[0].tolist()
 
