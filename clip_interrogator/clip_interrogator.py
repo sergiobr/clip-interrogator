@@ -141,7 +141,7 @@ class Interrogator():
         self.breeds = LabelTable(breeds, "breeds", self)
         print(f"data_path: {config.data_path}")
         self.flavors = LabelTable(load_list(config.data_path, 'flavors.txt'), "flavors", self)
-        #self.flavors = LabelTable(load_list(config.data_path, 'dogs.txt'), "dogs", self)
+        self.celebs = LabelTable(load_list(config.data_path, 'celebs.txt'), "celebs", self)
         self.mediums = LabelTable(load_list(config.data_path, 'mediums.txt'), "mediums", self)
         #self.movements = LabelTable(load_list(config.data_path, 'movements.txt'), "movements", self)
         #self.trendings = LabelTable(trending_list, "trendings", self)
@@ -232,13 +232,13 @@ class Interrogator():
         medium = self.mediums.rank(image_features, 5)[0]
         breed = self.breeds.rank(image_features, 2)[0]
         #trending = self.trendings.rank(image_features, 1)[0]
-        #movement = self.movements.rank(image_features, 1)[0]
+        celebs = self.celeb.rank(image_features, 4)[0]
         flaves = ", ".join(self.flavors.rank(image_features, max_flavors))
 
         if caption.startswith(medium):
             prompt = f"{caption}, {flaves}"
         else:
-            prompt = f"{caption}, {medium}, {breed}, {flaves}"
+            prompt = f"{caption}, {medium}, {breed}, {celebs}, {flaves}"
 
         return _truncate_to_fit(prompt, self.tokenize)
 
@@ -254,7 +254,7 @@ class Interrogator():
         are less readable."""
         caption = caption or self.generate_caption(image)
         image_features = self.image_to_features(image)
-        merged = _merge_tables([self.flavors, self.mediums, self.breeds], self)
+        merged = _merge_tables([self.flavors, self.mediums, self.breeds, self.celebs], self)
         tops = merged.rank(image_features, max_flavors)
         
         return _truncate_to_fit(caption + ", " + ", ".join(tops), self.tokenize)
