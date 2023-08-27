@@ -37,16 +37,17 @@ def image_analysis(image, clip_model_name):
     #top_trendings = ci.trendings.rank(image_features, 0)
     top_flavors = ci.flavors.rank(image_features, 20)
     top_breeds = ci.breeds.rank(image_features, 5)
-
+    top_celebs = ci.celebs.rank(image_features, 4)
+    
     medium_ranks = {medium: sim for medium, sim in zip(top_mediums, ci.similarities(image_features, top_mediums))}
     breed_ranks = {breed: sim for breed, sim in zip(top_breeds, ci.similarities(image_features, top_breeds))}
     flavor_ranks = {flavor: sim for flavor, sim in zip(top_flavors, ci.similarities(image_features, top_flavors))}
-
+    celeb_ranks = {celeb: sim for celeb, sim in zip(top_celevs, ci.similarities(image_features, top_celebs))}
     # artist_ranks = {artist: sim for artist, sim in zip(top_artists, ci.similarities(image_features, top_artists))}
     # movement_ranks = {movement: sim for movement, sim in zip(top_movements, ci.similarities(image_features, top_movements))}
     # trending_ranks = {trending: sim for trending, sim in zip(top_trendings, ci.similarities(image_features, top_trendings))}
     
-    return medium_ranks, flavor_ranks, breed_ranks
+    return medium_ranks, flavor_ranks, breed_ranks, celeb_ranks
 
 # called by gradio at Prompt tab
 def image_to_prompt(image, mode, clip_model_name, blip_model_name):
@@ -92,9 +93,10 @@ def analyze_tab():
             #trending = gr.Label(label="Trending", num_top_classes=5)
             flavor = gr.Label(label="Flavor", num_top_classes=50)
             breed = gr.Label(label="Breed", num_top_classes=5)
+            celeb = gr.Label(label="Celeb", num_top_classes=4)
 
     button = gr.Button("Analyze")
-    button.click(image_analysis, inputs=[image, model], outputs=[medium, flavor, breed])
+    button.click(image_analysis, inputs=[image, model], outputs=[medium, flavor, breed, celeb])
 
 with gr.Blocks() as ui:
     gr.Markdown("# <center>🕵️‍♂️ CLIP Interrogator 🕵️‍♂️</center>")
